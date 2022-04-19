@@ -9,8 +9,9 @@ from sklearn.neural_network import MLPRegressor
 from sklearn import tree
 from matplotlib import pyplot as plt
 
-
 SIGN_0 = '_'
+
+
 def unzip(path_to_years):
     """
     The method extracts all files from the zip files in the folders
@@ -86,6 +87,54 @@ def merge_strava_sl(folder_strava: str, file_sl: DataFrame):
     return file_sl
 
 
+def draw_results(data_to_draw: DataFrame, tuples_to_draw: list, rank_name=''):
+    """
+    In this method, counting for each method over time is plotted for each city
+    :param data_to_draw:
+    :param tuples_to_draw: for example [[('LongBeach_streetlight', 'LongBeach_strava'),
+     ('SanLuisObispo_streetlight', 'SanLuisObispo_strava')]
+    :return:
+    """
+    plt.close("all")
+    for city in tuples_to_draw:
+        city_name = city[0].split('_')[0] + rank_name + '.png'
+        y = [city[0], city[1]]
+        data_to_draw.plot(x='date', y=y)
+        plt.savefig(fname=os.path.join('walking_index/figures', city_name))
+
+
+def draw_results_ranking(data_to_draw: DataFrame, tuples_to_draw: list):
+    """
+    The method finds the rank for each counting method and draws the ranking results with the draw_results method
+    :param data_to_draw:
+    :param tuples_to_draw:
+    :return:
+    """
+    from scipy.stats import rankdata
+
+    new_df = DataFrame()
+    new_df['date'] = data_to_draw['date']
+
+    def ranking():
+        """
+        In order to calculate ranking for many columns the data sho
+        :return:
+        """
+        group = data_to_draw[group_names]
+        group_np = group.to_numpy()
+        group_rank = rankdata(group_np)
+        group_right_fr = np.reshape(group_rank, (data_to_draw.shape[0], len(tuples_to_draw)))
+        return group_right_fr
+
+    group_names = [i[0] for i in tuples_to_draw]
+    new_df[group_names] = ranking()
+    group_names = [i[1] for i in tuples_to_draw]
+    new_df[group_names] = ranking()
+
+    draw_results(new_df, tuples_to_draw, '_rank')
+    return new_df
+
+
 def calculate_count_bikes(my_data: DataFrame, clf) -> DataFrame:
     """
     rank bikes count based on the @my_data and the machine learning algorithm
@@ -113,6 +162,10 @@ def calculate_count_bikes(my_data: DataFrame, clf) -> DataFrame:
     res['std'] = res.std(axis=1)
 
     return res
+
+
+def calculate_avg_std(my_data: DataFrame, tuples_to_draw: list):
+    for
 
 
 def div_to_walking_count(my_div: tuple):

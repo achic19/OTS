@@ -6,60 +6,79 @@ from python.html import *
 from python.my_functions import *
 
 if __name__ == '__main__':
-    # 1 PARAMETER SECTION #
-    parameters = {'unzip': False, 'prepare_street_light_data': False, 'update_file_street_light': False,
+
+    # PARAMETER SECTION #
+    parameters = {'div_to_count': False,
+                  'unzip': False, 'prepare_street_light_data': False, 'update_file_street_light': False,
                   'merge_strava_sl': False,
                   'draw_results': False,
-                  'draw_results_ranking': True,
-                  'calculate_count_bikes': False,
-                  'div_to_walking_count': False}
-    # 2 The folder_data path with \\
-    FOLDER_DATA = 'walking_index\\streetlight\\by_month'
-    # 3 for 'prepare_street_light_data' and 'update_file_street_light'
-    RES_LOC = os.path.join(FOLDER_DATA, 'data.csv')
-    # 4 for 'prepare_street_light_data'
-    SL_USER = 'ped'
-    # 5 for 'update_file_street_light' and 'merge_strava_sl'
-    COM_FILE = r'walking_index\comparison.csv'
-    # 6 for merge_strava_sl
-    STRAVA_FOLDER = r'walking_index\strava'
-    # 7 for 'draw_results' , 'merge_strava_sl' and 'draw_results_ranking'
-    FINAL = r'walking_index\final.csv'
-    # 8 for 'draw_results' and 'draw_results_ranking'
-    TUPLES = [('LongBeach_streetlight', 'LongBeach_strava'), ('SanLuisObispo_streetlight', 'SanLuisObispo_strava'),
-              ('SantaBarbara_streetlight', 'SantaBarbara_strava'), ('SantaMaria_streetlight', 'SantaMaria_strava')]
-    # 9 'draw_results_ranking' and ''calculate_avg_std'
-    MU_RANK = r'walking_index\rank.csv'
+                  'draw_results_method': True,
+                  'calculate_avg_std': True,
+                  'calculate_count_ml': False
+                  }
+    # index folder - bike of walking
+    INDEX_FOLDER = 'walking_index'
+    # what is the method to standardize the data
+    METHOD = 'zscore'
+    # tuples of columns, so the code loops over each tuple column
+    TUPLES = [['LongBeach_streetlight', 'LongBeach_strava'], ['SanLuisObispo_streetlight', 'SanLuisObispo_strava'],
+              ['SantaBarbara_streetlight', 'SantaBarbara_strava'], ['SantaMaria_streetlight', 'SantaMaria_strava']]
+    # Month to drop in the analysis part
+    MONTHS_TO_DROP = ['2018_12']
+    # data about the number of victims killed & injured.
+    city_crashes = {'LongBeach': 383, 'SanLuisObispo': 25, 'SantaBarbara': 62, 'SantaMaria': 22}
 
     # END PARAMETER SECTION #
 
+    if parameters['div_to_count']:
+        # Get the pedestrian count for each place for the months between 2018 and 2021.
+        # This data is stored as a dictionary of places and HTML elements
+        print('div_to_count')
+        for my_html in my_dic.items():
+            div_to_count(my_html)
+
+    folder_data = os.path.join(INDEX_FOLDER, 'streetlight', 'by_month')
     if parameters['unzip']:
         print('unzip')
-        unzip(path_to_years=FOLDER_DATA)
+        unzip(path_to_years=folder_data)
 
+    res_loc = os.path.join(folder_data, 'data.csv')
     if parameters['prepare_street_light_data']:
         print('prepare_street_light_data')
-        res = prepare_street_light_data(path_to_years=FOLDER_DATA, sl_user=SL_USER)
-        res.to_csv(RES_LOC)
+        sl_user = 'ped' if INDEX_FOLDER == 'walking_index' else 'bike'
+        res = prepare_street_light_data(path_to_years=folder_data, sl_user=sl_user)
+        res.to_csv(res_loc)
+
+    com_file = os.path.join(INDEX_FOLDER, 'comparison.csv')
     if parameters['update_file_street_light']:
         print('update_file_street_light')
-        update_file_street_light(RES_LOC).to_csv(COM_FILE)
+        update_file_street_light(res_loc).to_csv(com_file)
+
+    strava_folder = os.path.join(INDEX_FOLDER, 'strava')
+    final = os.path.join(INDEX_FOLDER, 'final.csv')
     if parameters['merge_strava_sl']:
         print('merge_strava_sl')
-        merge_strava_sl(folder_strava=STRAVA_FOLDER, file_sl=pd.read_csv(COM_FILE)).to_csv(FINAL)
+        merge_strava_sl(folder_strava=strava_folder, file_sl=pd.read_csv(com_file)).to_csv(final)
     if parameters['draw_results']:
         print('draw_results')
-        df = pd.read_csv(FINAL)
-        df.drop(index=11, inplace=True)
+        df = pd.read_csv(final)
+        df = df[~df['date'].isin(MONTHS_TO_DROP)]
         draw_results(df, TUPLES)
-    if parameters['draw_results_ranking']:
-        print('draw_results_ranking')
-        df = pd.read_csv(FINAL)
-        df.drop(index=11, inplace=True)
-        draw_results_ranking(df, TUPLES).to_csv(MU_RANK)
-    if parameters['calculate_avg_std']:
 
-    if parameters['calculate_count_bikes']:
+    mu_rank = os.path.join(INDEX_FOLDER, METHOD + '.csv')
+    if parameters['draw_results_method']:
+        print('draw_results_method')
+        df = pd.read_csv(final)
+        df = df[~df['date'].isin(MONTHS_TO_DROP)]
+        draw_results_ranking(df, TUPLES, METHOD).to_csv(mu_rank)
+
+    classes = os.path.join(INDEX_FOLDER, 'classes_' + METHOD + '.csv')
+    if parameters['calculate_avg_std']:
+        print('calculate_avg_std')
+        df = pd.read_csv(mu_rank)
+        calculate_avg_std_index(df, TUPLES, city_crashes).to_csv(classes)
+
+    if parameters['calculate_count_ml']:
         # Parameters for this
         input_file = 'analysis/ml.csv'
         regressor = RandomForestRegressor(oob_score=True)
@@ -71,10 +90,3 @@ if __name__ == '__main__':
                 file_output)
         else:
             calculate_count_bikes(my_data=pd.read_csv(input_file), clf=regressor)
-
-    if parameters['div_to_walking_count']:
-        # Get the pedestrian count for each place for the months between 2018 and 2021.
-        # This data is stored as a dictionary of places and HTML elements
-        print('div_to_walking_count')
-        for my_html in my_dic.items():
-            div_to_walking_count(my_html)

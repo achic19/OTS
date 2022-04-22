@@ -12,6 +12,23 @@ from matplotlib import pyplot as plt
 SIGN_0 = '_'
 
 
+def div_to_count(my_div: tuple):
+    """
+    Prepare a CSV file with month and count
+    :param my_div:
+    :return:
+    """
+    place = my_div[0]
+    data = my_div[1]
+    print('_{}'.format(place))
+    new_data_set = {}
+    # Based on Strava's structure, the data is extracted
+    split_date = data.split('-')
+    new_data_set['date'] = list(map(lambda x, y: '_'.join([x[-4:], y]), split_date[::2], split_date[1::2]))
+    new_data_set['count'] = [int(item.split(',')[0]) for item in data.split('total_activities&quot;:')[1:]]
+    DataFrame(new_data_set).to_csv(os.path.join('walking_index', 'strava', place + '.csv'))
+
+
 def unzip(path_to_years):
     """
     The method extracts all files from the zip files in the folders
@@ -90,48 +107,54 @@ def merge_strava_sl(folder_strava: str, file_sl: DataFrame):
 def draw_results(data_to_draw: DataFrame, tuples_to_draw: list, rank_name=''):
     """
     In this method, counting for each method over time is plotted for each city
+    :param rank_name:
     :param data_to_draw:
-    :param tuples_to_draw: for example [[('LongBeach_streetlight', 'LongBeach_strava'),
-     ('SanLuisObispo_streetlight', 'SanLuisObispo_strava')]
+    :param tuples_to_draw: for example [[['LongBeach_streetlight', 'LongBeach_strava'],
+     ['SanLuisObispo_streetlight', 'SanLuisObispo_strava']] - list of 2 cells list
     :return:
     """
     plt.close("all")
     for city in tuples_to_draw:
         city_name = city[0].split('_')[0] + rank_name + '.png'
-        y = [city[0], city[1]]
-        data_to_draw.plot(x='date', y=y)
+        data_to_draw.plot(x='date', y=city)
         plt.savefig(fname=os.path.join('walking_index/figures', city_name))
 
 
-def draw_results_ranking(data_to_draw: DataFrame, tuples_to_draw: list):
+def draw_results_ranking(data_to_draw: DataFrame, tuples_to_draw: list, method: str) -> DataFrame:
     """
     The method finds the rank for each counting method and draws the ranking results with the draw_results method
+    :param method:
     :param data_to_draw:
     :param tuples_to_draw:
     :return:
     """
-    from scipy.stats import rankdata
+    from scipy.stats import rankdata, zscore
 
     new_df = DataFrame()
     new_df['date'] = data_to_draw['date']
 
-    def ranking():
+    def standardize():
         """
-        In order to calculate ranking for many columns the data sho
+        In order to calculate ranking for many columns the data should be transferred to numpy array which then can be
+        used by scipy.stats
         :return:
         """
         group = data_to_draw[group_names]
         group_np = group.to_numpy()
-        group_rank = rankdata(group_np)
+        if method == 'rank':
+            group_rank = rankdata(group_np)
+        else:
+            group_rank = zscore(group_np,axis=None)
+            group_rank = (group_rank + abs(np.amin(group_rank)) + 1) * 10
         group_right_fr = np.reshape(group_rank, (data_to_draw.shape[0], len(tuples_to_draw)))
         return group_right_fr
 
     group_names = [i[0] for i in tuples_to_draw]
-    new_df[group_names] = ranking()
+    new_df[group_names] = standardize()
     group_names = [i[1] for i in tuples_to_draw]
-    new_df[group_names] = ranking()
+    new_df[group_names] = standardize()
 
-    draw_results(new_df, tuples_to_draw, '_rank')
+    draw_results(new_df, tuples_to_draw, '_' + method)
     return new_df
 
 
@@ -164,22 +187,44 @@ def calculate_count_bikes(my_data: DataFrame, clf) -> DataFrame:
     return res
 
 
-def calculate_avg_std(my_data: DataFrame, tuples_to_draw: list):
-    for
-
-
-def div_to_walking_count(my_div: tuple):
+def calculate_avg_std_index(my_data: DataFrame, method_tuples: list, injuries_deaths: dict) -> DataFrame:
     """
-    Prepare a CSV file with month and count
-    :param my_div:
+    This method calculates the number-of-trip class for each city by averaging the months
+       (their counts are also averaged) the standard deviation.Then the index is derived from the
+        number of injuries/deaths in crashes divided by the number of trips.
+
+    :param my_data:
+    :param method_tuples:  stores tuples of columns, so the code loops over each tuple column in @my_data
+    :param injuries_deaths: dictionary of a place and number of injuries/deaths
     :return:
     """
-    place = my_div[0]
-    data = my_div[1]
-    print('_{}'.format(place))
-    new_data_set = {}
-    # Based on Strava's structure, the data is extracted
-    split_date = data.split('-')
-    new_data_set['date'] = list(map(lambda x, y: '_'.join([x[-4:], y]), split_date[::2], split_date[1::2]))
-    new_data_set['count'] = [int(item.split(',')[0]) for item in data.split('total_activities&quot;:')[1:]]
-    DataFrame(new_data_set).to_csv(os.path.join('walking_index', 'strava', place + '.csv'))
+
+    def fill_dic():
+        """
+        It generates all the necessary values and stat and append them to result dictionary (@res_dic)
+        :return:
+        """
+        city_name = city[0].split('_')[0]
+        print(SIGN_0 + city_name)
+        res_dic['city'].append(city_name)
+        class_val = int(final_avg / 10)
+        res_dic['class_val'].append(class_val)
+        res_dic['std'].append(round(final_std, 3))
+        std_99 = final_std * 2.5
+        res_dic['std_99'].append(round(std_99, 3))
+        res_dic['min_class'].append(int((final_avg - std_99) / 10))
+        res_dic['max_class'].append(int((final_avg + std_99) / 10))
+        res_dic['index'].append(round(injuries_deaths[city_name] / class_val, 0))
+
+    res_dic = {'city': [], 'class_val': [], 'std': [], 'std_99': [], 'min_class': [], 'max_class': [], 'index': []}
+    for city in method_tuples:
+        data = my_data[city]
+        avg = (data[city[0]] + data[city[1]]) / 2
+        std = abs(avg - data[city[0]])
+        final_avg = avg.mean()
+        # Based on error propagation, the final standard deviation is calculated
+        # using the standard deviation of each month and the number of elements
+        final_std = ((std ** 2).sum()) ** 0.5 / (len(avg))
+        fill_dic()
+
+    return DataFrame(res_dic)

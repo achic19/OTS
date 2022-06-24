@@ -104,9 +104,10 @@ def merge_strava_sl(folder_strava: str, file_sl: DataFrame):
     return file_sl
 
 
-def draw_results(data_to_draw: DataFrame, tuples_to_draw: list, rank_name=''):
+def draw_results(data_to_draw: DataFrame, tuples_to_draw: list, folder: str, rank_name=''):
     """
     In this method, counting for each method over time is plotted for each city
+    :param folder:
     :param rank_name:
     :param data_to_draw:
     :param tuples_to_draw: for example [[['LongBeach_streetlight', 'LongBeach_strava'],
@@ -117,12 +118,13 @@ def draw_results(data_to_draw: DataFrame, tuples_to_draw: list, rank_name=''):
     for city in tuples_to_draw:
         city_name = city[0].split('_')[0] + rank_name + '.png'
         data_to_draw.plot(x='date', y=city)
-        plt.savefig(fname=os.path.join('walking_index/figures', city_name))
+        plt.savefig(fname=os.path.join(folder, 'figures', city_name))
 
 
-def draw_results_ranking(data_to_draw: DataFrame, tuples_to_draw: list, method: str) -> DataFrame:
+def draw_results_ranking(data_to_draw: DataFrame, tuples_to_draw: list, method: str, folder: str) -> DataFrame:
     """
     The method finds the rank for each counting method and draws the ranking results with the draw_results method
+    :param folder:
     :param method:
     :param data_to_draw:
     :param tuples_to_draw:
@@ -144,7 +146,7 @@ def draw_results_ranking(data_to_draw: DataFrame, tuples_to_draw: list, method: 
         if method == 'rank':
             group_rank = rankdata(group_np)
         else:
-            group_rank = zscore(group_np,axis=None)
+            group_rank = zscore(group_np, axis=None)
             group_rank = (group_rank + abs(np.amin(group_rank)) + 1) * 10
         group_right_fr = np.reshape(group_rank, (data_to_draw.shape[0], len(tuples_to_draw)))
         return group_right_fr
@@ -154,7 +156,7 @@ def draw_results_ranking(data_to_draw: DataFrame, tuples_to_draw: list, method: 
     group_names = [i[1] for i in tuples_to_draw]
     new_df[group_names] = standardize()
 
-    draw_results(new_df, tuples_to_draw, '_' + method)
+    draw_results(new_df, tuples_to_draw, folder=folder, rank_name='_' + method)
     return new_df
 
 
@@ -207,16 +209,16 @@ def calculate_avg_std_index(my_data: DataFrame, method_tuples: list, injuries_de
         city_name = city[0].split('_')[0]
         print(SIGN_0 + city_name)
         res_dic['city'].append(city_name)
-        class_val = int(final_avg / 10)
-        res_dic['class_val'].append(class_val)
+        class_val = final_avg
+        res_dic['exposure'].append(class_val)
         res_dic['std'].append(round(final_std, 3))
         std_99 = final_std * 2.5
-        res_dic['std_99'].append(round(std_99, 3))
-        res_dic['min_class'].append(int((final_avg - std_99) / 10))
-        res_dic['max_class'].append(int((final_avg + std_99) / 10))
-        res_dic['index'].append(round(injuries_deaths[city_name] / class_val, 0))
+        res_dic['std_99%'].append(round(std_99, 3))
+        res_dic['min_class'].append(int((final_avg - std_99)))
+        res_dic['max_class'].append(int((final_avg + std_99)))
+        res_dic['index'].append(round(injuries_deaths[city_name] / class_val, 3))
 
-    res_dic = {'city': [], 'class_val': [], 'std': [], 'std_99': [], 'min_class': [], 'max_class': [], 'index': []}
+    res_dic = {'city': [], 'exposure': [], 'std': [], 'std_99%': [], 'min_class': [], 'max_class': [], 'index': []}
     for city in method_tuples:
         data = my_data[city]
         avg = (data[city[0]] + data[city[1]]) / 2
